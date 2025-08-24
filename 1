@@ -4,30 +4,20 @@ import pandas as pd
 from PIL import Image
 import requests
 from io import BytesIO
-import calendar
-
-# -----------------------------
-# Base data (edit as you like)
-# -----------------------------
-USD_RATE = 120  # 1 USD ~ 120 BDT (update when needed)
-
-# Farm-gate price guesses in Tk/kg (edit to your local prices)
+import calendar 
+USD_RATE = 120
 fish_prices = {
     "Tilapia": 200, "Catfish": 250,
     "Catla": 260, "Rohu": 240, "Mrigal": 220,
     "Silver Carp": 200, "Grass Carp": 210, "Common Carp": 210
 }
-
-# Bangladesh 6-season multipliers by species (keep or tweak)
 season_price_multiplier = {
     s: {'Summer':1.05,'Rainy':1.08,'Autumn':1.10,'Late Autumn':1.00,'Winter':1.15,'Spring':1.05}
     for s in fish_prices.keys()
 }
-# Optionally fine-tune a few:
 season_price_multiplier["Catla"]["Summer"] = 1.00
 season_price_multiplier["Tilapia"]["Late Autumn"] = 0.95
 
-# Image URLs
 fish_images = {
     "Tilapia":"https://upload.wikimedia.org/wikipedia/commons/7/71/Tilapia_zillii.jpg",
     "Catfish":"https://upload.wikimedia.org/wikipedia/commons/2/2d/Clarias_gariepinus_01.jpg",
@@ -38,8 +28,6 @@ fish_images = {
     "Grass Carp":"https://upload.wikimedia.org/wikipedia/commons/0/0b/Ctenopharyngodon_idella.jpeg",
     "Common Carp":"https://upload.wikimedia.org/wikipedia/commons/4/43/Common_carp.jpg",
 }
-
-# Month -> Bangladesh season
 def month_to_season(m):
     if m in (4,5): return "Summer"
     if m in (6,7): return "Rainy"
@@ -47,11 +35,6 @@ def month_to_season(m):
     if m in (10,11): return "Late Autumn"
     if m in (12,1): return "Winter"
     if m in (2,3): return "Spring"
-
-# -----------------------------
-# Polyculture combo presets
-# -----------------------------
-# Ratios sum to anything; we’ll normalize to 1.0
 combo_presets = {
     "IMC Trio (Catla:Rohu:Mrigal = 1:1:1)":
         {"Catla":1, "Rohu":1, "Mrigal":1},
@@ -60,10 +43,6 @@ combo_presets = {
     "Six-species (Catla,Rohu,Mrigal,Grass,Silver,Common)":
         {"Catla":1.5, "Rohu":1.5, "Mrigal":1.5, "Grass Carp":0.5, "Silver Carp":1, "Common Carp":1}
 }
-
-# -----------------------------
-# Core simulation
-# -----------------------------
 def simulate_one_month(species, season, stock_units, buy_cost_fish, feed_cost, other_cost):
     """species: str; stock_units ~ 'pond size' units allocated to this species in the combo."""
     # yield (kg) ~ 0.1 * units * random growth; adjust slightly by species
@@ -74,13 +53,10 @@ def simulate_one_month(species, season, stock_units, buy_cost_fish, feed_cost, o
     }.get(species, 1.0)
     growth = np.random.uniform(0.90, 1.15)
     yield_kg = max(0, stock_units * 0.1 * growth * spp_factor)
-
-    # selling price (Tk/kg)
+    
     sp_tk = round(fish_prices[species] * season_price_multiplier[species][season], 2)
     revenue_tk = yield_kg * sp_tk
-
-    # costs: feed + other are per combo (shared); buy_cost_fish is per "unit" here
-    # You can refine this if you track seed/fingerling prices separately by species.
+    
     total_cost_tk = feed_cost + other_cost + (buy_cost_fish * stock_units * 0.02)  # small seed cost share
 
     profit_tk = revenue_tk - total_cost_tk
@@ -111,26 +87,17 @@ def simulate_combo_year(combo_dict, pond_units, buy_cost_fish, feed_cost, other_
     df = pd.DataFrame(rows)
     total_profit = df["Profit (Tk)"].sum()
     return df, total_profit
-
-# -----------------------------
-# UI
-# -----------------------------
-st.title("🐟 Polyculture Profit Simulator (Bangladesh)")
-
-# Inputs (shared across simulations)
+    
 pond_units = st.number_input("Pond production units (relative size)", 100, 5000, 1200, step=50)
 buy_cost_fish = st.number_input("Buying cost (seed/fingerling & miscellaneous) per unit (Tk)", 0, 2000, 200, step=10)
 feed_cost = st.number_input("Monthly feed budget (Tk)", 0, 200000, 12000, step=500)
 other_cost = st.number_input("Monthly other costs (Tk)", 0, 100000, 4000, step=500)
 
-# Choose combos to test
 chosen_presets = st.multiselect(
     "Choose combo presets to compare",
     list(combo_presets.keys()),
     default=list(combo_presets.keys())[:2]
 )
-
-# Optional: build your own combo
 st.markdown("**Or create your own combo** (set weights; we normalize them automatically):")
 custom_species = st.multiselect("Species for custom combo", list(fish_prices.keys()), default=["Catla","Rohu","Mrigal"])
 weights = {}
@@ -146,29 +113,24 @@ if run:
     # Presets
     for name in chosen_presets:
         df_combo, tot_profit = simulate_combo_year(combo_presets[name], pond_units, buy_cost_fish, feed_cost, other_cost)
-        results.append((name, df_combo, tot_profit))
-    # Custom
+        results.append((name, df_combo, tot_profit)
     if weights:
         df_combo, tot_profit = simulate_combo_year(weights, pond_units, buy_cost_fish, feed_cost, other_cost)
         results.append(("Custom Combo", df_combo, tot_profit))
 
-    # Rank by profit
     results.sort(key=lambda x: x[2], reverse=True)
 
     st.subheader("🏆 Combo ranking by total yearly profit (Tk)")
     rank_table = pd.DataFrame([{"Combo": name, "Total Profit (Tk)": round(tot,1)} for name,_,tot in results])
     st.dataframe(rank_table)
 
-    # Show top combo details
     best_name, best_df, best_profit = results[0]
     st.subheader(f"📊 Best Combo: {best_name} — Total Profit: {round(best_profit,1)} Tk")
     st.dataframe(best_df)
 
-    # Profit trend (sum across species by month)
     month_profit = best_df.groupby("Month")["Profit (Tk)"].sum().reindex(calendar.month_name[1:13])
     st.line_chart(month_profit)
 
-    # Species images for the best combo
     st.subheader("🐠 Species in best combo")
     spp = list(best_df["Species"].unique())
     cols = st.columns(len(spp))
