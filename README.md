@@ -46,25 +46,5 @@ Web app for farmers
 
 📸 Sample Output
 
-(Graphs and fish images will display here when running in Colab or Jupyter)
-
-
----
-
-🔎 How to Run
-
-1. Clone repo:
-
-git clone https://github.com/yourusername/fish-farming-prediction.git
-cd fish-farming-prediction
-
-
-2. Install dependencies:
-
-pip install -r requirements.txt
-
-
-3. Run in Jupyter Notebook or Google Colab:
-
-jupyter notebook
+(Graphs and fish images will display here when running in Colab or Jupyter
 
